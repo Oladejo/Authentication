@@ -76,19 +76,14 @@ namespace IndentityExample.Controllers
 
             if (result.Succeeded)
             {
-                var signInResult = await _signInManager.PasswordSignInAsync(username, password, false, false);
+                //generation of email token
+                var code = await _userManager.GenerateEmailConfirmationTokenAsync(user);
 
-                if (signInResult.Succeeded)
-                {
-                    //generation of email token
-                    var code = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+                var link = Url.Action(nameof(VerifyEmail), "Home", new { userId = user.Id, code }, Request.Scheme, Request.Host.ToString());
 
-                    var link = Url.Action(nameof(VerifyEmail), "Home", new { userId = user.Id, code }, Request.Scheme, Request.Host.ToString());
+                await _emailService.SendAsync("test@test.com", "email verify", $"<a href=\" {link}\">Veirfy Email </a>");
 
-                    await  _emailService.SendAsync("test@test.com", "email verify", $"<a href=\" {link}\">Veirfy Email </a>");
-
-                    return RedirectToAction("EmailVerification");
-                }
+                return RedirectToAction("EmailVerification");
             }
 
             return RedirectToAction("Index");
