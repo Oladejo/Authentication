@@ -16,6 +16,13 @@ namespace Basic
         // For more information on how to configure your application, visit https://go.microsoft.com/fwlink/?LinkID=398940
         public void ConfigureServices(IServiceCollection services)
         {
+            services.AddAuthentication("CookieAuth")
+                .AddCookie("CookieAuth", config =>
+                {
+                    config.Cookie.Name = "heyzed.Cookie";
+                    config.LoginPath = "/Home/Authenticate";
+                });
+
             services.AddControllersWithViews();
         }
 
@@ -29,8 +36,12 @@ namespace Basic
             
             app.UseRouting();
 
-            app.UseAuthorization();
+            //who are you?
+            app.UseAuthentication();
 
+            //are you allowed?
+            app.UseAuthorization();
+            
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapDefaultControllerRoute();
