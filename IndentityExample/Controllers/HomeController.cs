@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿using IndentityExample.Model;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
@@ -30,6 +31,7 @@ namespace IndentityExample.Controllers
         public IActionResult Secret() => View();
 
         public IActionResult Login() => View();
+
         [HttpPost]
         public async Task<IActionResult> Login(string username, string password)
         {
@@ -81,6 +83,7 @@ namespace IndentityExample.Controllers
 
                     var emailVerificationHtml = $"<a href='{HtmlEncoder.Default.Encode(link)}'>Verify Email Address!</a>";
 
+                    // Send email through EmailService (MailKit NetCore) 
                     await _emailService.SendAsync("test@test.com", "Email verification", emailVerificationHtml, true);
 
                     return RedirectToAction("EmailVerification");
@@ -126,7 +129,64 @@ namespace IndentityExample.Controllers
             return RedirectToAction("Index");
         }
 
-        //Forgot Password
+        public IActionResult ForgotPassword() => View();
 
+        [HttpPost]
+        public async Task<IActionResult> ForgotPassword(string email)
+        {
+            if(string.IsNullOrEmpty(email)) { return BadRequest(); }
+
+            var user = await _userManager.FindByEmailAsync(email);
+            if (user == null) { return BadRequest(); }
+
+            // Generate Password Token
+            var passwordToken = await _userManager.GeneratePasswordResetTokenAsync(user);
+            passwordToken = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(passwordToken));
+
+            // Generate Password Reset Url
+            var passwordResetUrl = Url.Action(nameof(ResetPassword), "Home",
+                    new { userId = user.Id, passwordToken },
+                    Request.Scheme,
+                    Request.Host.ToString());
+
+            // Generate an HTML Link from Verification URL
+            var passwordResetHtml = $"<a href='{HtmlEncoder.Default.Encode(passwordResetUrl)}'>Click here to reset your password!</a>";
+
+            // Send email through EmailService (MailKit NetCore)
+            await _emailService.SendAsync("test@test.com", "Password Reset Request", passwordResetHtml, true);
+
+            return RedirectToAction("ForgotPasswordEmailSent");
+        }
+
+        public IActionResult ForgotPasswordEmailSent() => View();
+
+        [HttpGet()]
+        public IActionResult ResetPassword(string userId, string passwordToken)
+        {
+            if (string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(passwordToken)) { return RedirectToAction("Index"); }
+
+            passwordToken = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(passwordToken));
+
+            return View(new ResetPassword { UserId = userId, Token = passwordToken }); // Passing in the ViewModel.
+        }
+
+        [HttpPost()]
+        public async Task<IActionResult> ResetPassword(ResetPassword resetPassword) // Receiving the ViewModel from post.
+        {
+            if (!ModelState.IsValid) { return View(resetPassword); }
+
+            if (string.IsNullOrEmpty(resetPassword.UserId) || string.IsNullOrEmpty(resetPassword.Token) || string.IsNullOrEmpty(resetPassword.NewPassword))
+            { return RedirectToAction("Index"); }
+
+            var user = await _userManager.FindByIdAsync(resetPassword.UserId);
+            if (user == null) { return BadRequest(); }
+
+            var result = await _userManager.ResetPasswordAsync(user, resetPassword.Token, resetPassword.NewPassword);
+            if (!result.Succeeded) { return BadRequest(); }
+
+            return RedirectToAction("ResetPasswordConfirmed");
+        }
+
+        public IActionResult ResetPasswordConfirmed() => View();
     }
 }
