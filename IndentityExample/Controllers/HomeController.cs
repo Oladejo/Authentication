@@ -1,7 +1,10 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.WebUtilities;
 using NETCore.MailKit.Core;
+using System.Text;
+using System.Text.Encodings.Web;
 using System.Threading.Tasks;
 
 namespace IndentityExample.Controllers
@@ -21,22 +24,12 @@ namespace IndentityExample.Controllers
             _emailService = emailService;
         }
 
-        public IActionResult Index()
-        {
-            return View();
-        }
+        public IActionResult Index() => View();
 
         [Authorize]
-        public IActionResult Secret()
-        {
-            return View();
-        }
+        public IActionResult Secret() => View();
 
-        public IActionResult Login()
-        {
-            return View();
-        }
-
+        public IActionResult Login() => View();
         [HttpPost]
         public async Task<IActionResult> Login(string username, string password)
         {
@@ -56,44 +49,66 @@ namespace IndentityExample.Controllers
             return RedirectToAction("Index");
         }
 
-        public IActionResult Register()
-        {
-            return View();
-        }
+        public IActionResult Register() => View();
 
         [HttpPost]
         public async Task<IActionResult>  Register(string username, string password)
         {
-            //Register functionality
+            if(string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password)) { return BadRequest(); }
 
+            var checkUser = await _userManager.FindByNameAsync(username);
+            if(checkUser != null) { return BadRequest();  }
+
+            //Register functionality
             var user = new IdentityUser
             {
                 UserName = username,
-                Email = ""
+                Email = username
             };
 
             var result = await _userManager.CreateAsync(user, password);
 
             if (result.Succeeded)
             {
-                //generation of email token
-                var code = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+                //check if Email is confirmation is required
+                if (_userManager.Options.SignIn.RequireConfirmedEmail)
+                {
+                    //generation of email token
+                    var code = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+                    code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
 
-                var link = Url.Action(nameof(VerifyEmail), "Home", new { userId = user.Id, code }, Request.Scheme, Request.Host.ToString());
+                    var link = Url.Action(nameof(VerifyEmail), "Home", new { userId = user.Id, code }, Request.Scheme, Request.Host.ToString());
 
-                await _emailService.SendAsync("test@test.com", "email verify", $"<a href=\" {link}\">Veirfy Email </a>", true);
+                    var emailVerificationHtml = $"<a href='{HtmlEncoder.Default.Encode(link)}'>Verify Email Address!</a>";
 
-                return RedirectToAction("EmailVerification");
+                    await _emailService.SendAsync("test@test.com", "Email verification", emailVerificationHtml, true);
+
+                    return RedirectToAction("EmailVerification");
+                }
+                else
+                {
+                    //login the user
+                    var signInUser = await _signInManager.PasswordSignInAsync(user, password, false, false);
+                    if(! signInUser.Succeeded) { return BadRequest();  }
+
+                    return RedirectToAction("Secret");
+                }
             }
 
             return RedirectToAction("Index");
         }
 
+        public IActionResult EmailVerification() => View();
+             
         public async Task<IActionResult> VerifyEmail(string userId,  string code)
         {
+            if(string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(code)) { return RedirectToAction("Index");  }
+
             var user = await _userManager.FindByIdAsync(userId);
             if(user != null)
             {
+                code = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(code));
+
                 var result =  await _userManager.ConfirmEmailAsync(user, code);
 
                 if (result.Succeeded)
@@ -104,13 +119,14 @@ namespace IndentityExample.Controllers
 
             return BadRequest();
         }
-
-        public IActionResult EmailVerification() => View();
-
+                
         public  async Task<IActionResult> Logout()
         {
             await _signInManager.SignOutAsync();
             return RedirectToAction("Index");
         }
+
+        //Forgot Password
+
     }
 }
