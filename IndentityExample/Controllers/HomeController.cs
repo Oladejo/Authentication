@@ -43,7 +43,7 @@ namespace IndentityExample.Controllers
             //Login functionality
             var user = await _userManager.FindByNameAsync(username);
 
-            if (user == null)
+            if (user != null)
             {
                 var signInResult = await _signInManager.PasswordSignInAsync(username, password, false, false);
 
@@ -81,7 +81,7 @@ namespace IndentityExample.Controllers
 
                 var link = Url.Action(nameof(VerifyEmail), "Home", new { userId = user.Id, code }, Request.Scheme, Request.Host.ToString());
 
-                await _emailService.SendAsync("test@test.com", "email verify", $"<a href=\" {link}\">Veirfy Email </a>");
+                await _emailService.SendAsync("test@test.com", "email verify", $"<a href=\" {link}\">Veirfy Email </a>", true);
 
                 return RedirectToAction("EmailVerification");
             }
@@ -92,13 +92,14 @@ namespace IndentityExample.Controllers
         public async Task<IActionResult> VerifyEmail(string userId,  string code)
         {
             var user = await _userManager.FindByIdAsync(userId);
-            if (user == null) return BadRequest();
-
-            var result =  await _userManager.ConfirmEmailAsync(user, code);
-
-            if (result.Succeeded)
+            if(user != null)
             {
-                return View();
+                var result =  await _userManager.ConfirmEmailAsync(user, code);
+
+                if (result.Succeeded)
+                {
+                    return View();
+                }
             }
 
             return BadRequest();
